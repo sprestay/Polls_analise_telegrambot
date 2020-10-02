@@ -13,8 +13,9 @@ function analise(stage) {
     'analiseScene',
 
     async ctx => {
-        manager.load('model.nlp');
+        manager.load('model.nlp'); // А что будет, если модель пуста?
         data = data.result;
+        console.log(data);
         question_list = Object.keys(data);
 
         for (let quest of question_list) {
@@ -28,7 +29,8 @@ function analise(stage) {
                 else
                     answers[resp.intent] = 1;
             }
-            ctx.replyWithHTML(Object.keys(answers).map(key => key + " - " + answers[key]).join("\n"));
+            let for_return = Object.keys(answers).length > 0 ? (Object.keys(answers).map(key => key + " - " + answers[key]).join("\n")) : '<b>Нету данных</b>';
+            ctx.replyWithHTML(for_return);
         }
     });
     stage.register(analise);

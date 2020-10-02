@@ -9,8 +9,7 @@ const QuestSchema = new Schema({
     categories: {
         type: Object,
     }
-});
+}); // Добавить привязку к модели
 
 var Quest = mongoose.model('question', QuestSchema);
-
 module.exports = Quest;

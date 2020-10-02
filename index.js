@@ -45,7 +45,7 @@ bot.start(ctx => {
     
     Загрузи файл, и продолжим
     
-    В файле есть заголовки (названия столбцов)?
+    И,кстати, в файле есть заголовки (названия столбцов)?
     `, Extra.markup(Markup.inlineKeyboard([
         Markup.callbackButton('Заголовки есть', 'header_true'),
         Markup.callbackButton('Заголовков нет', 'header_false'),
@@ -124,7 +124,8 @@ bot.action('answer', ctx => {
             [Markup.callbackButton("? Это вопрос ?", "question"),Markup.callbackButton("❗Это ответ❗", "answer")]
         ]
     })
-})
+});
+
 
 bot.hears("➤ Далее ➤", async ctx => {
     
@@ -140,16 +141,17 @@ bot.hears("➤ Далее ➤", async ctx => {
             quest_indx = headers.indexOf(question);
         
             for (let row of data) {
-                if (!result[row[quest_indx]])
+                if (!result[row[quest_indx]] && row[answ_indx].trim().length >= 2) //Здесь так же делаем проверку, чтобы не создавать пустого вопроса
                     result[row[quest_indx]] = [];
-                result[row[quest_indx]].push(row[answ_indx]);
+                if (row[answ_indx].trim().length >= 2) //Отбрасываем пустые ответы
+                    result[row[quest_indx]].push(row[answ_indx].trim());
             }
         } else 
-            result['question'] = data.map(item => item[answ_indx]);
+            result['question'] = data.filter(item => item[answ_indx].trim().length >= 2).map(item => item[answ_indx]);
 
         exports['result'] = result;
 
-        await ctx.reply("Теперь разметим данные.", { // Разбиваем на 2 ответа, чтобы в одном убрать клаву, а в другом добавить.
+        await ctx.reply("Отлично, данные сохранили", { // Разбиваем на 2 ответа, чтобы в одном убрать клаву, а в другом добавить.
             reply_markup: {
                 remove_keyboard: true,
             }
@@ -159,26 +161,26 @@ bot.hears("➤ Далее ➤", async ctx => {
         if (question) {
             msg = `
             Всего вопросов: <b>${Object.keys(result).length.toString()}</b>
-            Разбивка по вопросам:
-            _______________________________
+            \nРазбивка по вопросам:
+            \n_______________________________
             ${Object.keys(result).map(item => {
                 return (item + ' -- ' + result[item].length.toString())
             }).join('\n')}
-            _______________________________
+            \n_______________________________
             `
         }
 
         await ctx.replyWithHTML(`
         ${msg}
-        Всего вопросов - ${data.length}
-        _________________________________
-        Теперь вручную разметим вопросы.
+        \nВсего ответов - <b>${data.length}</b>
+        \n_________________________________
+        ${fs.existsSync('models/model.nlp') ? '\nМожешь использовать готовую модель, или обучить свою' :'\nТеперь вручную разметим вопросы.'}
         `, {
             reply_markup: {
-                inline_keyboard: fs.existsSync('model.nlp') ? [
-                        [Markup.callbackButton("Разметить", 'go')],
-                        [Markup.callbackButton("Использовать готовую модель", 'ready')]
-                    ] : [[Markup.callbackButton("Приступить", 'go')]]
+                inline_keyboard: fs.existsSync('models/model.nlp') ? [
+                        [Markup.callbackButton("Новая", 'go')],
+                        [Markup.callbackButton("Готовая", 'ready')]
+                    ] : [[Markup.callbackButton("Новая", 'go')]]
             }
         }).then(res => previous = res.message_id);
     }
