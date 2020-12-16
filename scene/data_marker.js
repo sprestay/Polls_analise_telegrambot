@@ -7,12 +7,8 @@ const Model = require('../db_models/model');
 const { NlpManager } = require('node-nlp');
 const fs = require('fs');
 var data = require('../index');
-const { all } = require('async');
 
 const manager = new NlpManager({ languages: ['ru'], nlu: { log: true } });
-if (fs.existsSync('model.nlp'))
-    manager.load('model.nlp');
-// exports['manager'] = manager;
 
 let categories = {}; // здесь сохраняем размеченные данные
 let question_indx = 0;
@@ -85,14 +81,14 @@ function data_marker(stage) {
                     _______________________________\n
                     ${model.categories.join(', ')}
                     `
-                    ctx.replyWithHTML(msg, {
+                    await ctx.replyWithHTML(msg, {
                         reply_markup: {
                             inline_keyboard: [[Markup.callbackButton('Выбрать', model.id)]]
                         }
                     });
                 }
                 model_list_was_printed = true;
-                ctx.reply("Выбери нужную модель, или нажми пропустить", {
+                await ctx.reply("Выбери нужную модель, или нажми пропустить", {
                     reply_markup: {
                         inline_keyboard: [[Markup.callbackButton("Пропустить", 'skip')]]
                     }
@@ -102,8 +98,12 @@ function data_marker(stage) {
                 return ctx.wizard.next();
             }
         } else {
-            selected_model = ctx.update.callback_query.data;
-            ctx.reply("Модель выбранна. Чтобы случайно не испортить данные, создадим сначала копию. Введи название своей модели");
+            selected_model = ctx.update.callback_query.data == 'skip' ? null : ctx.update.callback_query.data;
+            if (selected_model) {
+                ctx.reply("Модель выбранна. Чтобы случайно не испортить данные, создадим сначала копию. Введи название своей модели");
+                manager.load('./models/' + selected_model + '.nlp'); //Проверить работоспособность!
+            } else
+                ctx.reply("Введи название модели");
             return ctx.wizard.next();
         }
     },
@@ -128,7 +128,6 @@ function data_marker(stage) {
         return ctx.wizard.next();
     },
     async (ctx) => { // В этом блоке мы определяем размер выборки
-
         let msg = ctx.update.callback_query ? ctx.update.callback_query.data : ctx.message.text.trim().toLowerCase();
 
         if (msg != 'auto' && Number(msg) && Number(msg) > 0 && Number(msg) <= 100) 
@@ -183,7 +182,7 @@ function data_marker(stage) {
                 }
             }).then(res => previous = res.message_id);
         } else { // Ответы закончились
-            await Quest.create({text: question_list[question_indx], categories: categories});
+            await Quest.create({text: question_list[question_indx] != 'question' ? question_list[question_indx] : model_name, categories: categories});
             question_indx++;
             // У нас есть еще вопросы.
             if (question_indx < question_list.length) {
@@ -216,7 +215,6 @@ function data_marker(stage) {
                 await Model.create({
                     id: model_id,
                     name: model_name,
-                    description: "some_text", //если есть совпадающие категории - будет дубль. Имеет смысл предлагать пользователю готовые категории. Пересмотреть категории - единые для все вопросов
                     categories: selected_model ? models.filter(item => item.id == selected_model)[0].categories.concat(all_categories_of_new_model) : all_categories_of_new_model, 
                     model_status: selected_model ? 'updated' : 'new',
                     author: user_id,
@@ -245,12 +243,4 @@ function data_marker(stage) {
     return dataMarker;
 }
 
-module.exports = data_marker;
-
-
-// {
-//     'вопрос': {
-//         'категория 1': [],
-//         'категория 2': [],
-//     }
-// }
+module.exports = { data_marker, selected_model };

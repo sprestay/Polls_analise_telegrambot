@@ -1,4 +1,4 @@
-const api_token = '1091494251:AAHQ0Gs_sdtJKiCAV99cVh0w-i7nOGc4WqE';
+// const api_token = '1091494251:AAHQ0Gs_sdtJKiCAV99cVh0w-i7nOGc4WqE';
 const { Telegraf } = require('telegraf');
 const session = require('telegraf/session');
 const Stage = require('telegraf/stage');
@@ -10,14 +10,12 @@ const mongoose = require('mongoose');
 const fs = require('fs');
 const data_marker = require('./scene/data_marker');
 const nlp_module = require('./scene/nlp');
-
+const config = require('./config')
 
 const stage = new Stage();
-const bot = new Telegraf(api_token);
-const db_user = 'sprestay';
-const db_password = 'xF9kibsAwCXWYbkF';
-const db_name = 'nlp_bot';
-const db_url = `mongodb+srv://${db_user}:${db_password}@cluster0.oqvee.mongodb.net/${db_name}?retryWrites=true&w=majority`;
+const bot = new Telegraf(config.api_token);
+mongoose.set('useCreateIndex', true); // new
+const db_url = `mongodb+srv://${config.db_user}:${config.db_password}@cluster0.oqvee.mongodb.net/${config.db_name}?retryWrites=true&w=majority`;
 
 const connect = mongoose.connect(db_url, { useNewUrlParser: true , useUnifiedTopology: true, useFindAndModify: false});
 connect.then((success) => {
@@ -32,10 +30,11 @@ let head = false;
 let data = [];
 let result = {};
 let previous = null; // последнее сообщения этой сцены
+let delimiter = null;
 
 bot.use(session());
 bot.use(stage.middleware());
-data_marker(stage);
+data_marker.data_marker(stage);
 nlp_module(stage);
 
 bot.start(ctx => {
@@ -47,8 +46,8 @@ bot.start(ctx => {
     
     И,кстати, в файле есть заголовки (названия столбцов)?
     `, Extra.markup(Markup.inlineKeyboard([
-        Markup.callbackButton('Заголовки есть', 'header_true'),
-        Markup.callbackButton('Заголовков нет', 'header_false'),
+        [ Markup.callbackButton(';', ';'), Markup.callbackButton(',', ','), Markup.callbackButton('tab', 'tab') ],
+        [ Markup.callbackButton('Заголовки есть', 'header_true'),Markup.callbackButton('Заголовков нет', 'header_false') ],
     ])));
 });
 
@@ -70,6 +69,10 @@ bot.action('header_false', ctx => {
             Markup.callbackButton('✔ Заголовков нет ✔', 'header_false'),
         ]]});
 });
+
+bot.action(new RegExp('^(tab|,|;)$'), ctx => {
+    delimiter = ctx.update.callback_query.data;
+});
 // Конец блока про Header
 
 bot.on('document', async ctx => {
@@ -82,6 +85,7 @@ bot.on('document', async ctx => {
     const parseStream = papa.parse(papa.NODE_STREAM_INPUT, {
         download: true,
         encoding: 'utf8',
+        delimiter: delimiter ? delimiter : ';' // Пусть пользователь указывает сам
     });
 
     dataStream.pipe(parseStream);
@@ -141,9 +145,9 @@ bot.hears("➤ Далее ➤", async ctx => {
             quest_indx = headers.indexOf(question);
         
             for (let row of data) {
-                if (!result[row[quest_indx]] && row[answ_indx].trim().length >= 2) //Здесь так же делаем проверку, чтобы не создавать пустого вопроса
+                if (!result[row[quest_indx]] && row[answ_indx].trim().length >= 1) //Здесь так же делаем проверку, чтобы не создавать пустого вопроса
                     result[row[quest_indx]] = [];
-                if (row[answ_indx].trim().length >= 2) //Отбрасываем пустые ответы
+                if (row[answ_indx].trim().length >= 1) //Отбрасываем пустые ответы
                     result[row[quest_indx]].push(row[answ_indx].trim());
             }
         } else 
@@ -174,13 +178,13 @@ bot.hears("➤ Далее ➤", async ctx => {
         ${msg}
         \nВсего ответов - <b>${data.length}</b>
         \n_________________________________
-        ${fs.existsSync('models/model.nlp') ? '\nМожешь использовать готовую модель, или обучить свою' :'\nТеперь вручную разметим вопросы.'}
+        \nМожешь использовать готовую модель, или обучить свою
         `, {
             reply_markup: {
-                inline_keyboard: fs.existsSync('models/model.nlp') ? [
-                        [Markup.callbackButton("Новая", 'go')],
-                        [Markup.callbackButton("Готовая", 'ready')]
-                    ] : [[Markup.callbackButton("Новая", 'go')]]
+                inline_keyboard: [
+                        [Markup.callbackButton("Обучить свою модель", 'go')],
+                        [Markup.callbackButton("Использовать готовые модели", 'ready')]
+                    ]
             }
         }).then(res => previous = res.message_id);
     }
